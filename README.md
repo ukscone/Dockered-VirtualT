@@ -1,8 +1,9 @@
 # Dockered-VirtualT
 Dockerized VirtualT
 
-Requires the messy use of xhost + before running. will be fixed and done properly eventually
+Requires the messy use of xhost before running. will be fixed and done properly eventually
 
 docker build -t virtualt .
 
+xhost local:docker
 docker run -ti --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix virtualt
