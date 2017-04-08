@@ -1,0 +1,125 @@
+# ===============================================
+# Makefile for VirtualT.  Notice that the order
+# of the fltk_images and fltk libraries in the
+# LIBFILES definition is order dependent.
+#
+# This Makefile builds silently except to echo
+# the current compile file.  To see the actual
+# build commands, comment out the .SILENT:
+# line below.
+# ===============================================
+# Modded for the Raspberry Pi -- RKD 02/25/14
+.SILENT:
+
+-include $(shell uname).mk
+
+# ====================================
+# Define base gcc compiler environment
+# ====================================
+SRCDIR          = src
+OBJDIR          = obj
+DEPDIR          = .dep
+
+# Optimize only if not debug mode
+ifeq ($(DEBUG),)
+OPTIMIZE        = -O3
+endif
+
+CFLAGS          += -I $(SRCDIR)/FLU $(OPTIMIZE) $(DEBUG) -fsigned-char
+CPPFLAGS        += -I $(SRCDIR) $(OPTIMIZE) $(DEBUG)
+VIRTUALT        = virtualt
+CLIENT          = vt_client
+CC              = $(CROSS_COMPILE)gcc
+
+FLTKLIB     =   $(FLTKDIR)/lib/libfltk.a
+CFLAGS      +=  -I$(FLTKDIR)
+CPPFLAGS    +=  -I$(FLTKDIR)
+
+# ================================
+# Define our linker flags and libs
+# ================================
+LDFLAGS         +=      -L/usr/X11R6/lib -L$(FLTKDIR)/lib
+LIBFILES        =       -lstdc++ -lfltk_images -lfltk_jpeg -lfltk_png -lfltk_z -lfltk -lm -lc -ldl -lX11 -lpthread -lXft -lXinerama -lfontconfig -lXext -lXrender
+
+# ====================================
+# Define all source files for VirtualT
+# ====================================
+VT_SOURCES      =   $(wildcard $(SRCDIR)/*.c) $(wildcard $(SRCDIR)/*.cpp)
+VT_EXCLUDES =   inet_pton.c clientsocket.cpp vt_client_main.cpp
+SOURCES         =   $(filter-out $(VT_EXCLUDES),$(patsubst $(SRCDIR)/%,%,$(VT_SOURCES)))
+
+# =================================
+# Define source files for vt_client
+# =================================
+CLIENT_SRC      =       clientsocket.cpp vt_client_main.cpp socket.cpp
+
+# =============================
+# Define the object files
+# =============================
+OBJTMP          =       $(SOURCES:.c=.o)
+OBJTMP2         =       $(OBJTMP:.cpp=.o)
+OBJECTS         =       $(patsubst %,$(OBJDIR)/%,$(OBJTMP2))
+
+# Objects for the vt_client
+CLIENT_OTMP     =       $(CLIENT_SRC:.cpp=.o)
+CLIENT_OBJS     =       $(patsubst %,$(OBJDIR)/%,$(CLIENT_OTMP))
+
+# ==========================================
+# Declare auto-generated dependencies rules
+# ==========================================
+OTMP        =   $(OBJECTS) $(CLIENT_OBJS)
+DEPS        =   $(patsubst $(OBJDIR)/%.o,$(DEPDIR)/%.d,$(OTMP))
+
+# ===========================================================
+# Rule for building all exectuables.  Must be the 1st target.
+# ===========================================================
+all:	init $(VIRTUALT) $(CLIENT)
+
+.PHONY:	init
+init:
+	@mkdir -p $(DEPDIR)
+	@mkdir -p $(OBJDIR)
+
+#Include our built dependencies
+-include $(DEPS)
+
+# ========================
+# Rule to build VirtualT
+# ========================
+$(VIRTUALT):	$(OBJECTS)
+	@echo "Linking" $(VIRTUALT)
+	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBFILES) -o $@ ;
+	cd ..
+
+
+# ========================
+# Rule to build vt_client
+# ========================
+$(CLIENT):	$(CLIENT_OBJS)
+		$(CC) $(LDFLAGS) $(CLIENT_OBJS) $(LIBFILES) -o $@ ; 		cd ..
+
+# ============================================================
+# Rule for compiling source files.  Define rule for CPP first.
+# ============================================================
+$(OBJDIR)/%.o:	$(SRCDIR)/%.cpp
+		@echo "Compiling" $*.cpp
+		$(CC) $(CPPFLAGS) -c $< -o $@
+		@$(CC) -MM -MT $(OBJDIR)/$*.o $(CPPFLAGS) $(SRCDIR)/$*.cpp > $(DEPDIR)/$*.d
+
+# Now the rule for C files
+$(OBJDIR)/%.o:	$(SRCDIR)/%.c
+		@echo "Compiling" $*.c
+		$(CC) $(CFLAGS) -c $< -o $@
+		@$(CC) -MM -MT $(OBJDIR)/$*.o $(CFLAGS) $(SRCDIR)/$*.c > $(DEPDIR)/$*.d
+
+# =============================
+# Rule to clean all build files
+# =============================
+.PHONY:	clean
+clean:
+	@echo "=== cleaning ===";
+	@echo "Objects..."
+	@rm -rf $(OBJDIR) $(DEPDIR)
+	@echo "Executables..."
+	rm -f virtualt
+	rm -f vt_client
